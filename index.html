@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Barbearia Oliveira - Sistema de Agendamento</title>
+    <meta name="description" content="Sistema de agendamento para barbearias. Gerencie sua barbearia de forma profissional." />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Barbearia Oliveira" />
+
+    <!-- Preview de compartilhamento (WhatsApp, Instagram, Facebook) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Barbearia Oliveira — Agende seu horário online" />
+    <meta property="og:description" content="Corte, barba e estilo com hora marcada. Agende em segundos, sem fila." />
+    <meta property="og:image" content="https://barbearia-oliveira-snowy.vercel.app/applink.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:url" content="https://barbearia-oliveira-snowy.vercel.app/" />
+    <meta property="og:site_name" content="Barbearia Oliveira" />
+    <meta name="twitter:card" content="summary" />
+
+    <!-- Ícones -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/applink-v2.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #0a0a0a; color: #fefcf3; }
+      #root { min-height: 100vh; }
+    </style>
+    <script>
+      (function() {
+        const theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.className = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
