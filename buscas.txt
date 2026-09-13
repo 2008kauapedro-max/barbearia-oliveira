@@ -1,0 +1,92 @@
+﻿
+  src\components\AssistantChat.tsx:231:        if (!apt) return 'Você não tem nenhum agendamento 
+futuro confirmado para cancelar.';
+> src\components\AssistantChat.tsx:232:        const { error } = await 
+supabase.from('appointments').update({ status: 'cancelled' }).eq('id', apt.id);
+  src\components\AssistantChat.tsx:233:        if (error) return 'Erro ao cancelar.';
+  src\components\AssistantChat.tsx:234:        return `Cancelado: 
+${apt.date.split('-').reverse().join('/')} às ${apt.time}.`;
+  src\pages\ClientArea.tsx:417:    if (!confirm('Cancelar este agendamento?')) return;
+> src\pages\ClientArea.tsx:418:    const { error } = await supabase.from('appointments').update({ 
+status: 'cancelled' }).eq('id', id);
+  src\pages\ClientArea.tsx:419:    if (!error) onUpdate();
+  src\pages\ClientArea.tsx:420:  };
+
+
+
+> src\components\AssistantChat.tsx:84:      faltas_30_dias: list30.filter(a => a.status === 
+'no_show').length,
+  src\components\AssistantChat.tsx:85:      ranking_barbeiros_30_dias: 
+Array.from(barberMap.entries()).map(([nome, v]) => ({ nome, ...v })),
+> src\components\ClientClub.tsx:60:              <span className={`text-[10px] font-bold 
+${subscriptionHealth(current) === 'green' ? 'text-green-400' : subscriptionHealth(current) === 
+'yellow' ? 'text-yellow-400' : 'text-red-400'}`}>
+  src\components\ClientClub.tsx:61:                {current.status === 'expired' || 
+daysUntil(current.due_date) < 0 ? 'VENCIDA' : `${daysUntil(current.due_date)} dias restantes`}
+> src\components\NotificationBell.tsx:42:          <span className="absolute -top-0.5 -right-0.5 w-5 
+h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center 
+justify-center">{unread > 9 ? '9+' : unread}</span>
+  src\components\NotificationBell.tsx:43:        )}
+> src\components\ProtectedRoute.tsx:25:            <p className="text-sm bg-red-500/10 text-red-400 
+rounded-xl px-3 py-2 mb-4">Motivo: {profile.disable_reason}</p>
+  src\components\ProtectedRoute.tsx:26:          )}
+> src\pages\ClientArea.tsx:134:  const cls = health === 'green' ? 'border-green-500/20 
+bg-green-500/5' : health === 'yellow' ? 'border-yellow-500/20 bg-yellow-500/5' : 'border-red-500/20 
+bg-red-500/5';
+> src\pages\ClientArea.tsx:135:  const txt = health === 'green' ? 'text-green-400' : health === 
+'yellow' ? 'text-yellow-400' : 'text-red-400';
+  src\pages\ClientArea.tsx:136:  const days = daysUntil(mySub.due_date);
+> src\pages\ClientArea.tsx:151:        <div className={`h-full rounded-full ${health === 'red' ? 
+'bg-red-400' : health === 'yellow' ? 'bg-yellow-400' : 'bg-green-400'}`} style={{ width: 
+`${(mySub.cuts_remaining / mySub.cuts_included) * 100}%` }} />
+  src\pages\ClientArea.tsx:152:      </div>
+> src\pages\ClientArea.tsx:340:                <p className="text-center text-red-400 text-sm 
+py-4">Barbearia fechada nesta data ou sem horário compatível com a duração do serviço.</p>
+  src\pages\ClientArea.tsx:341:              ) : (
+> src\pages\ClientArea.tsx:382:          {error && <div className="bg-red-500/10 border 
+border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-xl">{error}</div>}
+  src\pages\ClientArea.tsx:383:
+> src\pages\ClientArea.tsx:423:    if (!confirm('Ocultar este registro da sua lista?')) return;
+  src\pages\ClientArea.tsx:424:    const { data } = await supabase.rpc('hide_appointment', { 
+p_appointment_id: id });
+> src\pages\ClientArea.tsx:469:                    <button onClick={() => handleCancel(apt.id)} 
+className="text-xs text-red-400/70 border border-red-500/20 px-3 py-1.5 rounded-lg transition 
+hover:bg-red-500/10 whitespace-nowrap">Cancelar</button>
+  src\pages\ClientArea.tsx:470:                  )}
+> src\pages\ClientArea.tsx:471:                  {apt.status === 'cancelled' && <span 
+className="text-xs text-red-400 whitespace-nowrap">Cancelado</span>}
+  src\pages\ClientArea.tsx:472:                  {(tab === 'past' || tab === 'cancelled') && (
+> src\pages\ClientArea.tsx:473:                    <button onClick={() => handleDelete(apt.id)} 
+className="p-1.5 text-cream-300/30 hover:text-red-400 transition" title="Excluir registro">
+  src\pages\ClientArea.tsx:474:                      <Trash2 size={14} />
+> src\pages\ClientArea.tsx:578:      <button onClick={() => { signOut(); navigate('/'); }} 
+className="w-full bg-red-500/10 text-red-400 border border-red-500/20 font-bold py-3 rounded-xl flex 
+items-center justify-center gap-2">
+  src\pages\ClientArea.tsx:579:        <LogOut size={16} /> Sair da conta
+> src\pages\InternalLayout.tsx:98:              <button onClick={handleSignOut} className="w-full 
+flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-400/70 hover:text-red-400 
+hover:bg-red-500/5 transition-all mt-2">
+  src\pages\InternalLayout.tsx:99:                <LogOut size={18} /> Sair
+> src\pages\InternalLayout.tsx:160:              <button onClick={handleSignOut} 
+className="text-cream-300/30 hover:text-red-400 transition shrink-0" title="Sair">
+  src\pages\InternalLayout.tsx:161:                <LogOut size={16} />
+> src\pages\InternalLogin.tsx:140:          <div className="bg-red-500/10 border border-red-500/20 
+text-red-400 text-sm px-4 py-3 rounded-xl mb-4 flex items-center gap-2">
+  src\pages\InternalLogin.tsx:141:            <AlertCircle size={16} />
+
+
+
+> src\components\AssistantChat.tsx:204:        const { data: r } = await 
+supabase.rpc('send_campaign', { p_campaign_id: data.id });
+  src\components\AssistantChat.tsx:205:        if (r?.error) return r.error;
+  src\components\AssistantChat.tsx:206:        return 'Lembretes enviados às notificações dos 
+clientes com assinatura vencendo! 🔔';
+> src\pages\ClientArea.tsx:232:    const { data } = await supabase.rpc('book_appointment', {
+  src\pages\ClientArea.tsx:233:      p_barber_id: barber.id,
+  src\pages\ClientArea.tsx:234:      p_service_id: service.id,
+> src\pages\ClientArea.tsx:424:    const { data } = await supabase.rpc('hide_appointment', { 
+p_appointment_id: id });
+  src\pages\ClientArea.tsx:425:    if (data?.error) alert(data.error);
+  src\pages\ClientArea.tsx:426:    else onUpdate();
+
+

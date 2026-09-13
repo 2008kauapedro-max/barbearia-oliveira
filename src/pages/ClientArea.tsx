@@ -8,6 +8,7 @@ import NotificationBell from '../components/NotificationBell';
 import AssistantChat from '../components/AssistantChat';
 import ClientFeed from '../components/ClientFeed';
 import ClientClub from '../components/ClientClub';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { Calendar, Clock, LogOut, User as UserIcon, Check, Camera, ChevronLeft, Scissors, MessageCircle, Crown, Image as ImageIcon, Bot, Trash2, Star } from 'lucide-react';
 
 export default function ClientArea() {
@@ -26,7 +27,7 @@ export default function ClientArea() {
 
   const loadAppointments = async () => {
     if (!profile) return;
-        const { data, error } = await supabase.from('appointments').select(`*, services (name, price, duration_minutes), profiles:barber_id (full_name)`).eq('client_id', profile.id).eq('hidden_by_client', false).order('date', { ascending: true }).order('time', { ascending: true });
+    const { data, error } = await supabase.from('appointments').select(`*, services (name, price, duration_minutes), profiles:barber_id (full_name)`).eq('client_id', profile.id).eq('hidden_by_client', false).order('date', { ascending: true }).order('time', { ascending: true });
     if (!error && data) setAppointments(data);
     setLoading(false);
   };
@@ -396,6 +397,8 @@ function ClientAppointments({ appointments, onUpdate, profile }: any) {
   const [starPick, setStarPick] = useState<Record<string, number>>({});
   const [commentOpen, setCommentOpen] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; description?: string; variant?: 'danger' | 'warning' | 'neutral'; confirmLabel?: string; onConfirm: (() => Promise<any> | any) | null }>({ open: false, title: '', onConfirm: null });
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -413,17 +416,44 @@ function ClientAppointments({ appointments, onUpdate, profile }: any) {
   const cancelled = appointments.filter((a: any) => a.status === 'cancelled' && a.date >= cutoff);
   const current = tab === 'upcoming' ? upcoming : tab === 'past' ? past : cancelled;
 
-  const handleCancel = async (id: string) => {
-    if (!confirm('Cancelar este agendamento?')) return;
-    const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', id);
-    if (!error) onUpdate();
+  const handleCancel = (id: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Cancelar agendamento?',
+      description: 'Você perderá o horário reservado. Esta ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Sim, cancelar',
+      onConfirm: async () => {
+        const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', id);
+        if (!error) onUpdate();
+      },
+    });
   };
 
-    const handleDelete = async (id: string) => {
-    if (!confirm('Ocultar este registro da sua lista?')) return;
-    const { data } = await supabase.rpc('hide_appointment', { p_appointment_id: id });
-    if (data?.error) alert(data.error);
-    else onUpdate();
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Ocultar este registro?',
+      description: 'O atendimento sumirá da sua lista, mas continua no histórico da barbearia.',
+      variant: 'warning',
+      confirmLabel: 'Sim, ocultar',
+      onConfirm: async () => {
+        const { data } = await supabase.rpc('hide_appointment', { p_appointment_id: id });
+        if (data?.error) alert(data.error);
+        else onUpdate();
+      },
+    });
+  };
+
+  const handleConfirmStateConfirm = async () => {
+    if (!confirmState.onConfirm) return;
+    setConfirmLoading(true);
+    try {
+      await confirmState.onConfirm();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmState({ open: false, title: '', onConfirm: null });
+    }
   };
 
   const submitReview = async (apt: any) => {
@@ -518,6 +548,17 @@ function ClientAppointments({ appointments, onUpdate, profile }: any) {
         </div>
       )}
       <p className="text-[10px] text-cream-300/30 mt-3 text-center">Registros com mais de 30 dias somem desta lista automaticamente.</p>
+
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        confirmLabel={confirmState.confirmLabel}
+        loading={confirmLoading}
+        onConfirm={handleConfirmStateConfirm}
+        onCancel={() => { setConfirmState({ open: false, title: '', onConfirm: null }); setConfirmLoading(false); }}
+      />
     </div>
   );
 }
@@ -528,6 +569,8 @@ function ClientProfile({ profile, mySub }: any) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
   const [saved, setSaved] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const handleSave = async () => {
     if (!profile) return;
@@ -575,9 +618,24 @@ function ClientProfile({ profile, mySub }: any) {
         </div>
       </div>
       <button onClick={handleSave} className="w-full bg-yellow-500 text-[#0a0a0a] font-bold py-3 rounded-xl hover:bg-yellow-600 transition-all">Salvar alterações</button>
-      <button onClick={() => { signOut(); navigate('/'); }} className="w-full bg-red-500/10 text-red-400 border border-red-500/20 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+      <button onClick={() => setConfirmLogout(true)} className="w-full bg-red-500/10 text-red-400 border border-red-500/20 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
         <LogOut size={16} /> Sair da conta
       </button>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sair da conta?"
+        description="Você precisará fazer login novamente para acessar seus agendamentos."
+        variant="warning"
+        confirmLabel="Sim, sair"
+        loading={confirmLoading}
+        onConfirm={async () => {
+          setConfirmLoading(true);
+          await signOut();
+          navigate('/');
+        }}
+        onCancel={() => { setConfirmLogout(false); setConfirmLoading(false); }}
+      />
     </div>
   );
 }

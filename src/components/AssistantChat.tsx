@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, dateKey, daysUntil, isFuture, getDayHours } from '../lib/business';
 import { Send, Bot, Sparkles, AlertTriangle } from 'lucide-react';
+import ConfirmDialog from './ConfirmDialog';
 
 type Msg = { role: 'user' | 'ai'; text: string };
 
@@ -38,6 +39,8 @@ export default function AssistantChat() {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | { label: string; run: () => Promise<string> }>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; action?: () => Promise<any> | any; title: string; description?: string; variant?: 'danger' | 'warning' | 'neutral'; confirmLabel?: string }>({ open: false, title: '' });
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, thinking]);
@@ -93,7 +96,7 @@ export default function AssistantChat() {
     };
   };
 
-  // ===== FACTS DO BARBEIRO (só os próprios) =====
+  // ===== FACTS DO BARBEIRO =====
   const buildBarberFacts = async () => {
     const today = dateKey(new Date());
     const d7 = new Date(); d7.setDate(d7.getDate() - 6);
@@ -124,7 +127,7 @@ export default function AssistantChat() {
     };
   };
 
-  // ===== FACTS DO CLIENTE (só os próprios) =====
+  // ===== FACTS DO CLIENTE =====
   const buildClientFacts = async () => {
     const [apts, subRes] = await Promise.all([
       supabase.from('appointments').select('date, time, status, services(name, price), profiles:barber_id(full_name)').eq('client_id', profile!.id).order('date').order('time'),
@@ -151,7 +154,7 @@ export default function AssistantChat() {
   const buildFacts = role === 'OWNER' ? buildOwnerFacts : role === 'BARBER' ? buildBarberFacts : buildClientFacts;
 
   const callAI = async (history: Msg[], userText: string, facts: any): Promise<string> => {
-       let { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       const refreshed = await supabase.auth.refreshSession();
       session = refreshed.data.session;
@@ -189,21 +192,59 @@ export default function AssistantChat() {
     }
   };
 
+  const handleConfirmDialogConfirm = async () => {
+    if (!confirmDialog.action) return;
+    setConfirmLoading(true);
+    try {
+      const result = await confirmDialog.action();
+      if (typeof result === 'string') {
+        setMessages(prev => [...prev, { role: 'ai', text: result }]);
+      }
+    } finally {
+      setConfirmLoading(false);
+      setConfirmDialog({ open: false, title: '' });
+    }
+  };
+
   // ===== AÇÕES POR CARGO =====
   const ownerActions = [
     {
       label: '⚠️ Avisar assinaturas vencendo (campanha)',
       btn: '⚠️ Avisar vencendo',
       run: async () => {
-        const { data, error } = await supabase.from('campaigns').insert({
-          barbershop_id: shopId(), title: 'Sua assinatura está vencendo!',
-          message: 'Olá! Sua assinatura da Barbearia Oliveira está perto do vencimento. Bora renovar? 💈',
-          audience: 'expiring', channel: 'internal', status: 'draft',
-        }).select('id').single();
-        if (error || !data) return 'Erro ao criar a campanha.';
-        const { data: r } = await supabase.rpc('send_campaign', { p_campaign_id: data.id });
-        if (r?.error) return r.error;
-        return 'Lembretes enviados às notificações dos clientes com assinatura vencendo! 🔔';
+        const { data: subs } = await supabase.from('subscriptions')
+          .select('id, client:client_id(full_name)')
+          .eq('barbershop_id', shopId()).eq('status', 'active');
+        const vencendo = (subs || []).filter((s: any) => daysUntil(s.due_date) <= 7 && daysUntil(s.due_date) >= 0);
+        if (vencendo.length === 0) return 'Não há assinaturas vencendo nos próximos 7 dias. ✅';
+        return new Promise<string>((resolve) => {
+          setConfirmDialog({
+            open: true,
+            title: 'Enviar lembretes?',
+            description: `${vencendo.length} cliente(s) com assinatura vencendo nos próximos 7 dias receberão notificação. Esta ação não pode ser desfeita.`,
+            variant: 'warning',
+            confirmLabel: `Sim, avisar ${vencendo.length} cliente(s)`,
+            action: async () => {
+              const { data: campaigns } = await supabase.from('campaigns')
+                .insert({
+                  barbershop_id: shopId(),
+                  title: 'Sua assinatura está vencendo',
+                  message: 'Olá! Sua assinatura vence em breve. Renove na recepção para continuar aproveitando seus cortes!',
+                  audience: 'all',
+                  channel: 'internal',
+                  status: 'draft',
+                })
+                .select('id')
+                .single();
+              if (campaigns?.id) {
+                const { data: r } = await supabase.rpc('send_campaign', { p_campaign_id: campaigns.id });
+                if (r?.error) return r.error;
+                return `Lembretes enviados para ${vencendo.length} cliente(s) com assinatura vencendo! 🔔`;
+              }
+              return 'Erro ao criar campanha.';
+            },
+          });
+        });
       },
     },
     {
@@ -226,12 +267,24 @@ export default function AssistantChat() {
       label: '❌ Cancelar meu próximo agendamento confirmado',
       btn: '❌ Cancelar próximo',
       run: async () => {
-        const { data } = await supabase.from('appointments').select('*').eq('client_id', profile!.id).eq('status', 'confirmed').gte('date', dateKey(new Date())).order('date').order('time').limit(1);
+        const { data } = await supabase.from('appointments')
+          .select('*').eq('client_id', profile!.id).eq('status', 'confirmed')
+          .gt('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true }).limit(1);
         const apt: any = (data || [])[0];
         if (!apt) return 'Você não tem nenhum agendamento futuro confirmado para cancelar.';
-        const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', apt.id);
-        if (error) return 'Erro ao cancelar.';
-        return `Cancelado: ${apt.date.split('-').reverse().join('/')} às ${apt.time}.`;
+        return new Promise<string>((resolve) => {
+          setConfirmDialog({
+            open: true,
+            title: 'Cancelar agendamento?',
+            description: `${apt.date.split('-').reverse().join('/')} às ${apt.time}. Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Sim, cancelar',
+            action: async () => {
+              const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', apt.id);
+              resolve(error ? 'Erro ao cancelar.' : `Cancelado: ${apt.date.split('-').reverse().join('/')} às ${apt.time}.`);
+            },
+          });
+        });
       },
     },
   ];
@@ -253,7 +306,7 @@ export default function AssistantChat() {
   };
 
   return (
-           <div className={role === 'CLIENT' ? 'fixed inset-x-0 top-14 bottom-16 z-30 bg-[#0a0a0a] flex flex-col px-3 pt-3' : 'flex flex-col h-[calc(100dvh-190px)] lg:h-[calc(100dvh-140px)]'}>
+    <div className={role === 'CLIENT' ? 'fixed inset-x-0 top-14 bottom-16 z-30 bg-[#0a0a0a] flex flex-col px-3 pt-3' : 'flex flex-col h-[calc(100dvh-190px)] lg:h-[calc(100dvh-140px)]'}>
       <div className="mb-3">
         <h1 className="text-xl font-bold text-cream-50 flex items-center gap-2">
           <Bot size={20} className="text-yellow-400" />
@@ -265,7 +318,7 @@ export default function AssistantChat() {
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                       <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.role === 'user' ? 'bg-yellow-500 text-[#0a0a0a] font-medium whitespace-pre-wrap' : 'bg-zinc-900 border border-cream-100/5 text-cream-50'}`}>
+            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.role === 'user' ? 'bg-yellow-500 text-[#0a0a0a] font-medium whitespace-pre-wrap' : 'bg-zinc-900 border border-cream-100/5 text-cream-50'}`}>
               {m.role === 'user' ? m.text : renderRich(m.text)}
             </div>
           </div>
@@ -312,6 +365,17 @@ export default function AssistantChat() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        variant={confirmDialog.variant}
+        confirmLabel={confirmDialog.confirmLabel}
+        loading={confirmLoading}
+        onConfirm={handleConfirmDialogConfirm}
+        onCancel={() => { setConfirmDialog({ open: false, title: '' }); setConfirmLoading(false); }}
+      />
     </div>
   );
 }
