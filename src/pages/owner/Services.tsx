@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { Plus, Edit2, Trash2, X, Check, Scissors, DollarSign, Clock, Users } from 'lucide-react';
 
 interface Service {
@@ -21,6 +22,8 @@ export default function OwnerServices() {
   const [showForm, setShowForm] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [allowBarbersAddServices, setAllowBarbersAddServices] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; serviceId: string | null; serviceName: string }>({ open: false, serviceId: null, serviceName: '' });
+  const [confirmLoading, setConfirmLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -140,19 +143,28 @@ export default function OwnerServices() {
     setShowForm(true);
   };
 
-  const handleDelete = async (serviceId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este serviço?')) return;
-    
-    const { error } = await supabase
-      .from('services')
-      .delete()
-      .eq('id', serviceId);
-    
-    if (error) {
-      console.error('Erro ao excluir serviço:', error);
-      alert('Erro ao excluir serviço.');
-    } else {
-      loadServices();
+  const requestDelete = (service: Service) => {
+    setDeleteConfirm({ open: true, serviceId: service.id, serviceName: service.name });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm.serviceId) return;
+    setConfirmLoading(true);
+    try {
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', deleteConfirm.serviceId);
+      
+      if (error) {
+        console.error('Erro ao excluir serviço:', error);
+        alert('Erro ao excluir serviço.');
+      } else {
+        loadServices();
+      }
+    } finally {
+      setConfirmLoading(false);
+      setDeleteConfirm({ open: false, serviceId: null, serviceName: '' });
     }
   };
 
@@ -312,7 +324,7 @@ export default function OwnerServices() {
                     <Edit2 size={18} />
                   </button>
                   <button
-                    onClick={() => handleDelete(service.id)}
+                    onClick={() => requestDelete(service)}
                     className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all"
                     title="Excluir"
                   >
@@ -448,6 +460,17 @@ export default function OwnerServices() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Excluir serviço?"
+        description={`O serviço "${deleteConfirm.serviceName}" será removido permanentemente. Atendimentos antigos manterão o valor cobrado, mas perderão a referência do nome. Esta ação não pode ser desfeita.`}
+        variant="danger"
+        confirmLabel="Sim, excluir"
+        loading={confirmLoading}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => { setDeleteConfirm({ open: false, serviceId: null, serviceName: '' }); setConfirmLoading(false); }}
+      />
     </div>
   );
 }

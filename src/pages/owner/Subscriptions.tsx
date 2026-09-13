@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, subscriptionHealth, daysUntil } from '../../lib/business';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { Crown, Plus, RefreshCw, X, AlertCircle, Check, ChevronDown, ChevronUp, Search, Sparkles, Scissors, CalendarDays } from 'lucide-react';
 
 const DAY_LABELS: Record<string, string> = { sun: 'Domingo', mon: 'Segunda', tue: 'Terça', wed: 'Quarta', thu: 'Quinta', fri: 'Sexta', sat: 'Sábado' };
@@ -40,6 +41,9 @@ function SubscriptionsList() {
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [cancelConfirm, setCancelConfirm] = useState<{ open: boolean; subId: string | null; clientName: string }>({ open: false, subId: null, clientName: '' });
+  const [renewConfirm, setRenewConfirm] = useState<{ open: boolean; subId: string | null; clientName: string }>({ open: false, subId: null, clientName: '' });
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => { loadSubs(); }, []);
 
@@ -56,17 +60,37 @@ function SubscriptionsList() {
     setLoading(false);
   };
 
-  const handleRenew = async (subId: string) => {
-    if (!confirm('Renovar esta assinatura? Os cortes serão resetados e o vencimento estendido.')) return;
-    const { data } = await supabase.rpc('renew_subscription', { p_subscription_id: subId });
-    if (data?.error) alert(data.error);
-    else loadSubs();
+  const requestRenew = (sub: any) => {
+    setRenewConfirm({ open: true, subId: sub.id, clientName: sub.client?.full_name || 'Cliente' });
   };
 
-  const handleCancel = async (subId: string) => {
-    if (!confirm('Cancelar esta assinatura? O cliente perderá os cortes restantes.')) return;
-    await supabase.from('subscriptions').update({ status: 'cancelled' }).eq('id', subId);
-    loadSubs();
+  const handleRenewConfirm = async () => {
+    if (!renewConfirm.subId) return;
+    setConfirmLoading(true);
+    try {
+      const { data } = await supabase.rpc('renew_subscription', { p_subscription_id: renewConfirm.subId });
+      if (data?.error) alert(data.error);
+      else loadSubs();
+    } finally {
+      setConfirmLoading(false);
+      setRenewConfirm({ open: false, subId: null, clientName: '' });
+    }
+  };
+
+  const requestCancel = (sub: any) => {
+    setCancelConfirm({ open: true, subId: sub.id, clientName: sub.client?.full_name || 'Cliente' });
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelConfirm.subId) return;
+    setConfirmLoading(true);
+    try {
+      await supabase.from('subscriptions').update({ status: 'cancelled' }).eq('id', cancelConfirm.subId);
+      loadSubs();
+    } finally {
+      setConfirmLoading(false);
+      setCancelConfirm({ open: false, subId: null, clientName: '' });
+    }
   };
 
   const filtered = subs.filter(s => {
@@ -205,10 +229,10 @@ function SubscriptionsList() {
 
                     {s.status !== 'cancelled' && (
                       <div className="flex gap-2 pt-1">
-                        <button onClick={() => handleRenew(s.id)} className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/10 text-green-400 py-2.5 rounded-xl text-xs font-bold hover:bg-green-500/20 transition">
+                        <button onClick={() => requestRenew(s)} className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/10 text-green-400 py-2.5 rounded-xl text-xs font-bold hover:bg-green-500/20 transition">
                           <RefreshCw size={14} /> Renovar
                         </button>
-                        <button onClick={() => handleCancel(s.id)} className="flex items-center justify-center gap-1.5 bg-red-500/10 text-red-400 px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-red-500/20 transition">
+                        <button onClick={() => requestCancel(s)} className="flex items-center justify-center gap-1.5 bg-red-500/10 text-red-400 px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-red-500/20 transition">
                           <X size={14} /> Cancelar
                         </button>
                       </div>
@@ -222,6 +246,28 @@ function SubscriptionsList() {
       )}
 
       {showCreate && <CreateSubscriptionModal onClose={() => setShowCreate(false)} onSuccess={loadSubs} />}
+
+      <ConfirmDialog
+        open={renewConfirm.open}
+        title="Renovar assinatura?"
+        description={`A assinatura de ${renewConfirm.clientName} será renovada. Os cortes serão resetados e o vencimento estendido. Esta ação não pode ser desfeita.`}
+        variant="neutral"
+        confirmLabel="Sim, renovar"
+        loading={confirmLoading}
+        onConfirm={handleRenewConfirm}
+        onCancel={() => { setRenewConfirm({ open: false, subId: null, clientName: '' }); setConfirmLoading(false); }}
+      />
+
+      <ConfirmDialog
+        open={cancelConfirm.open}
+        title="Cancelar assinatura?"
+        description={`A assinatura de ${cancelConfirm.clientName} será cancelada. O cliente perderá os cortes restantes. Esta ação não pode ser desfeita.`}
+        variant="danger"
+        confirmLabel="Sim, cancelar"
+        loading={confirmLoading}
+        onConfirm={handleCancelConfirm}
+        onCancel={() => { setCancelConfirm({ open: false, subId: null, clientName: '' }); setConfirmLoading(false); }}
+      />
     </div>
   );
 }

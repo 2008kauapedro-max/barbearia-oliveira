@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { Plus, Edit2, Trash2, X, Scissors, DollarSign, Clock, AlertCircle } from 'lucide-react';
 
 export default function BarberServices() {
@@ -11,6 +12,8 @@ export default function BarberServices() {
   const [editingService, setEditingService] = useState<any | null>(null);
   const [canAddServices, setCanAddServices] = useState(false);
   const [error, setError] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; serviceId: string | null; serviceName: string }>({ open: false, serviceId: null, serviceName: '' });
+  const [confirmLoading, setConfirmLoading] = useState(false);
   
   const [formData, setFormData] = useState({ name: '', description: '', price: '', duration_minutes: '30', is_active: true });
 
@@ -58,10 +61,20 @@ export default function BarberServices() {
     }
   };
 
-  const handleDelete = async (serviceId: string) => {
-    if (!confirm('Excluir este serviço?')) return;
-    await supabase.from('services').delete().eq('id', serviceId);
-    loadServices();
+  const requestDelete = (service: any) => {
+    setDeleteConfirm({ open: true, serviceId: service.id, serviceName: service.name });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm.serviceId) return;
+    setConfirmLoading(true);
+    try {
+      await supabase.from('services').delete().eq('id', deleteConfirm.serviceId);
+      loadServices();
+    } finally {
+      setConfirmLoading(false);
+      setDeleteConfirm({ open: false, serviceId: null, serviceName: '' });
+    }
   };
 
   const formatPrice = (price: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
@@ -124,7 +137,7 @@ export default function BarberServices() {
                     <button onClick={() => { setEditingService(service); setFormData({ name: service.name, description: service.description || '', price: service.price.toString(), duration_minutes: service.duration_minutes.toString(), is_active: service.is_active }); setShowForm(true); }} className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-all">
                       <Edit2 size={18} />
                     </button>
-                    <button onClick={() => handleDelete(service.id)} className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all">
+                    <button onClick={() => requestDelete(service)} className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all">
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -161,6 +174,17 @@ export default function BarberServices() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Excluir serviço?"
+        description={`O serviço "${deleteConfirm.serviceName}" será removido permanentemente. Atendimentos antigos manterão o valor cobrado, mas perderão a referência do nome. Esta ação não pode ser desfeita.`}
+        variant="danger"
+        confirmLabel="Sim, excluir"
+        loading={confirmLoading}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => { setDeleteConfirm({ open: false, serviceId: null, serviceName: '' }); setConfirmLoading(false); }}
+      />
     </div>
   );
 }
