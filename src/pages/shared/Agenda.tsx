@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { STATUS_META, dateKey, addDays, generateSlots, findConflict, timeToMin, minToTime, formatCurrency } from '../../lib/business';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { Calendar, Plus, Clock, User, Scissors, CheckCircle, Play, X, UserX, AlertCircle, Crown, KeyRound } from 'lucide-react';
 
 const makeTempAuth = () =>
@@ -23,6 +24,8 @@ export default function SharedAgenda() {
   const [barberFilter, setBarberFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [quickRegister, setQuickRegister] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<null | { id: string; status: string; clientName?: string; time?: string }>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (!isOwner) return;
@@ -69,6 +72,42 @@ export default function SharedAgenda() {
     const { data } = await supabase.rpc('complete_appointment', { p_appointment_id: id });
     if (data?.error) alert(data.error);
     else loadAppointments();
+  };
+
+  const requestStatusChange = (id: string, status: string, clientName?: string, time?: string) => {
+    setPendingStatus({ id, status, clientName, time });
+  };
+
+  const handleConfirmStatus = async () => {
+    if (!pendingStatus) return;
+    setConfirmLoading(true);
+    try {
+      await changeStatus(pendingStatus.id, pendingStatus.status);
+    } finally {
+      setConfirmLoading(false);
+      setPendingStatus(null);
+    }
+  };
+
+  const getDialogProps = () => {
+    if (!pendingStatus) return null;
+    if (pendingStatus.status === 'cancelled') {
+      return {
+        title: 'Cancelar agendamento?',
+        description: `${pendingStatus.clientName || 'Cliente'} às ${pendingStatus.time || ''}. O horário será liberado na agenda. Esta ação não pode ser desfeita.`,
+        variant: 'danger' as const,
+        confirmLabel: 'Sim, cancelar',
+      };
+    }
+    if (pendingStatus.status === 'no_show') {
+      return {
+        title: 'Marcar como falta?',
+        description: `${pendingStatus.clientName || 'Cliente'} às ${pendingStatus.time || ''} será marcado como faltante. Esta ação não pode ser desfeita.`,
+        variant: 'warning' as const,
+        confirmLabel: 'Sim, marcar falta',
+      };
+    }
+    return null;
   };
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
@@ -159,7 +198,7 @@ export default function SharedAgenda() {
                         <CheckCircle size={12} /> Confirmar
                       </button>
                       {can('can_cancel') && (
-                        <button onClick={() => changeStatus(apt.id, 'cancelled')} className="flex items-center justify-center bg-red-500/10 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
+                        <button onClick={() => requestStatusChange(apt.id, 'cancelled', apt.client?.full_name, apt.time)} className="flex items-center justify-center bg-red-500/10 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
                           <X size={12} />
                         </button>
                       )}
@@ -171,12 +210,12 @@ export default function SharedAgenda() {
                         <Play size={12} /> Iniciar
                       </button>
                       {can('can_no_show') && (
-                        <button onClick={() => changeStatus(apt.id, 'no_show')} className="flex items-center justify-center gap-1 bg-orange-500/10 text-orange-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
+                        <button onClick={() => requestStatusChange(apt.id, 'no_show', apt.client?.full_name, apt.time)} className="flex items-center justify-center gap-1 bg-orange-500/10 text-orange-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
                           <UserX size={12} /> Faltou
                         </button>
                       )}
                       {can('can_cancel') && (
-                        <button onClick={() => changeStatus(apt.id, 'cancelled')} className="flex items-center justify-center bg-red-500/10 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
+                        <button onClick={() => requestStatusChange(apt.id, 'cancelled', apt.client?.full_name, apt.time)} className="flex items-center justify-center bg-red-500/10 text-red-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
                           <X size={12} />
                         </button>
                       )}
@@ -190,7 +229,7 @@ export default function SharedAgenda() {
                         </button>
                       )}
                       {can('can_no_show') && (
-                        <button onClick={() => changeStatus(apt.id, 'no_show')} className="flex items-center justify-center bg-orange-500/10 text-orange-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
+                        <button onClick={() => requestStatusChange(apt.id, 'no_show', apt.client?.full_name, apt.time)} className="flex items-center justify-center gap-1 bg-orange-500/10 text-orange-400 px-2.5 py-1.5 rounded-lg text-[10px] font-medium">
                           <UserX size={12} /> Faltou
                         </button>
                       )}
@@ -211,6 +250,19 @@ export default function SharedAgenda() {
           onSuccess={loadAppointments}
           services={services}
           barbers={barbers}
+        />
+      )}
+
+      {pendingStatus && getDialogProps() && (
+        <ConfirmDialog
+          open={true}
+          title={getDialogProps()!.title}
+          description={getDialogProps()!.description}
+          variant={getDialogProps()!.variant}
+          confirmLabel={getDialogProps()!.confirmLabel}
+          loading={confirmLoading}
+          onConfirm={handleConfirmStatus}
+          onCancel={() => { setPendingStatus(null); setConfirmLoading(false); }}
         />
       )}
     </div>
